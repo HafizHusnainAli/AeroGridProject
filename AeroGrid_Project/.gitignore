@@ -1,0 +1,11 @@
+# Exclude compiled binaries and temporary computer caches
+/**/bin/
+/**/obj/
+
+# Exclude local database copies used for scratchpad tests
+*.db-journal
+*.db-wal
+
+# Exclude user-specific local IDE workspace preferences
+.vs/
+.vscode/

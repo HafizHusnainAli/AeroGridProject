@@ -1,0 +1,383 @@
+@page "/gridmanager"
+@using System.Linq
+@using AeroGrid.Simulator
+@inherits GridManagerBase
+
+<div class="dashboard-layout">
+    <!-- ===================== ENTERPRISE HEADER ===================== -->
+    <header class="saas-header sticky-top">
+        <div class="container-fluid px-4">
+            <div class="d-flex align-items-center justify-content-between flex-wrap py-3 gap-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="brand-logo">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="3" y1="9" x2="21" y2="9"></line>
+                            <line x1="9" y1="21" x2="9" y2="9"></line>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="h5 mb-0 fw-bold text-slate-900">IoT-Sim Dashboard</h1>
+                        <small class="text-slate-500">Virtual Energy Grid Orchestration</small>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-4 flex-wrap">
+                    <div class="d-flex align-items-center gap-2 small text-slate-600">
+                        <span class="status-indicator sync-pulse"></span>
+                        Live Sync · @ProcessedWebLogs.Count records
+                    </div>
+                    <div class="badge-soft-success d-flex align-items-center gap-2">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        @* MODIFIED BY AI (Sprint 6 - Bug Fix 2): counts however many assets are
+                           active/exist in the Assets list, instead of a hardcoded 2-asset sum. *@
+                        @Assets.Count(a => a.IsActive) / @Assets.Count Assets Online
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+    <main class="container-fluid px-4 py-4">
+        
+        <!-- ===================== LIVE TELEMETRY SEARCH & WEATHER DISPLAY ===================== -->
+        <div class="saas-card mb-4 shadow-sm border-info" style="border-left: 4px solid #0dcaf0;">
+            <div class="saas-card-body p-4">
+                <div class="row align-items-center">
+                    <div class="col-md-5">
+                        <h5 class="text-info fw-bold mb-3">🌍 Global Node Synchronization</h5>
+                        <div class="input-group">
+                            <input type="text" class="form-control border-slate-300" 
+                                   placeholder="Enter City (e.g. Lahore, Karachi, Tokyo)" 
+                                   @bind="TargetCity"  @bind:event="oninput"/> 
+                                   
+                            <button class="btn btn-info px-4 text-white fw-medium" @onclick="FetchLiveWeatherAndRecalculateAsync" disabled="@IsSearching">
+                                @(IsSearching ? "Searching..." : "Sync Live Grid")
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-7 border-start border-slate-200 mt-4 mt-md-0">
+                        <div class="ps-md-4 d-flex justify-content-between flex-wrap gap-2">
+                            <div>
+                                <span class="text-slate-500 small text-uppercase fw-bold">Active Node</span>
+                                <h4 class="fw-bold text-slate-800 mb-0">@DisplayedCity</h4>
+                            </div>
+                            <div class="text-center">
+                                <span class="text-slate-500 small text-uppercase fw-bold">Cloud Cover</span>
+                                <h4 class="fw-bold text-warning mb-0">@LiveCloudCover%</h4>
+                            </div>
+                            <div class="text-center">
+                                <span class="text-slate-500 small text-uppercase fw-bold">Wind Speed</span>
+                                <h4 class="fw-bold text-primary mb-0">@LiveWindSpeed m/s</h4>
+                            </div>
+                            <!-- ADDED BY AI (Sprint 6 - API Task): Open-Meteo returns real temperature for free, so it's now shown alongside the other live readings. -->
+                            <div class="text-center">
+                                <span class="text-slate-500 small text-uppercase fw-bold">Temperature</span>
+                                <h4 class="fw-bold text-danger mb-0">@LiveTemperature.ToString("F1")&deg;C</h4>
+                            </div>
+                            <div class="text-end">
+                                <span class="text-slate-500 small text-uppercase fw-bold">Condition</span>
+                                <h4 class="fw-bold text-info text-capitalize mb-0">@LiveWeatherDescription</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- ===================== PRIMARY METRICS ===================== -->
+        <div class="row g-4">
+            <div class="col-12 col-sm-6 col-xl-3">
+                <div class="saas-card h-100">
+                    <div class="saas-card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h2 class="metric-title">Total Generation</h2>
+                                <div class="metric-value text-indigo-600">@TotalGeneration.ToString("N0") <span class="metric-unit">kWh</span></div>
+                            </div>
+                            <div class="icon-box bg-indigo-50 text-indigo-600">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                            </div>
+                        </div>
+                        <div class="metric-footer">
+                            <span class="text-slate-500">Combined output (24h)</span>
+                        </div>
+                        <div class="progress-track mt-3"><div class="progress-fill bg-indigo-500" style="width: @(GetCoveragePercent().ToString("F1"))%"></div></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-sm-6 col-xl-3">
+                <div class="saas-card h-100">
+                    <div class="saas-card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h2 class="metric-title">Factory Demand</h2>
+                                <div class="metric-value text-slate-800">@TotalDemand.ToString("N0") <span class="metric-unit">kWh</span></div>
+                            </div>
+                            <div class="icon-box bg-slate-100 text-slate-600">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21V9l6 4V9l6 4V6l6 4v11z"></path><path d="M3 21h18"></path></svg>
+                            </div>
+                        </div>
+                        <div class="metric-footer">
+                            <span class="text-slate-500">Fixed industrial load</span>
+                        </div>
+                        <div class="progress-track mt-3"><div class="progress-fill bg-slate-400" style="width:100%"></div></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-sm-6 col-xl-3">
+                <div class="saas-card h-100">
+                    <div class="saas-card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h2 class="metric-title">Total Savings</h2>
+                                <div class="metric-value text-emerald-600">@TotalSavings.ToString("C2")</div>
+                            </div>
+                            <div class="icon-box bg-emerald-50 text-emerald-600">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
+                            </div>
+                        </div>
+                        <div class="metric-footer">
+                            <span class="badge-soft-success">Retained Capital</span>
+                        </div>
+                        <div class="progress-track mt-3"><div class="progress-fill bg-emerald-500" style="width: @(GetSavingsRatioPercent().ToString("F1"))%"></div></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-sm-6 col-xl-3">
+                <div class="saas-card h-100">
+                    <div class="saas-card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h2 class="metric-title">Grid Expenses</h2>
+                                <div class="metric-value text-rose-600">@TotalExpenses.ToString("C2")</div>
+                            </div>
+                            <div class="icon-box bg-rose-50 text-rose-600">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline><polyline points="17 18 23 18 23 12"></polyline></svg>
+                            </div>
+                        </div>
+                        <div class="metric-footer">
+                            <span class="badge-soft-danger">Deficit Purchases</span>
+                        </div>
+                        <div class="progress-track mt-3"><div class="progress-fill bg-rose-500" style="width: @(GetExpenseRatioPercent().ToString("F1"))%"></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- ===================== CONTROLS & TELEMETRY ===================== -->
+        <div class="row g-4 mt-2">
+            <!-- Asset Management -->
+            <div class="col-12 col-xl-4">
+                <div class="saas-card h-100">
+                    <div class="saas-card-header">
+                        <h3 class="card-heading">Infrastructure Nodes</h3>
+                        <p class="card-subheading">Manage grid connections for hardware assets.</p>
+                    </div>
+                    <div class="saas-card-body">
+                        <div class="d-flex flex-column gap-3">
+                            @* MODIFIED BY AI (Sprint 6 - Bug Fix 2): this used to be two
+                               copy-pasted blocks hardcoded to IsSolarActive / IsWindActive.
+                               It now renders one row per item in the flexible Assets list, so
+                               adding a future 3rd/4th asset (in GridManager.razor.cs) gets it
+                               a working, correctly-wired toggle automatically -- no markup
+                               changes needed here. *@
+                            @foreach (var asset in Assets)
+                            {
+                                <div class="control-row">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="asset-icon @(asset.IsActive ? "bg-indigo-50 text-indigo-600" : "bg-slate-50 text-slate-400")">
+                                            @GetAssetIconMarkup(asset)
+                                        </div>
+                                        <div>
+                                            <div class="fw-semibold text-slate-800">@asset.Name</div>
+                                            <div class="small @(asset.IsActive ? "text-emerald-600" : "text-slate-500")">
+                                                @(asset.IsActive ? "Synchronized" : "Offline")
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="form-check form-switch custom-switch m-0">
+                                        <input class="form-check-input" type="checkbox" role="switch"
+                                               @bind="asset.IsActive" @bind:after="ToggleAsset" />
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        <div class="net-impact-box mt-4">
+                            <div class="text-slate-500 small fw-semibold text-uppercase tracking-wide mb-1">Net Financial Impact</div>
+                            <div class="fs-3 fw-bold @((TotalSavings - TotalExpenses) >= 0 ? "text-emerald-600" : "text-rose-600")">
+                                @((TotalSavings - TotalExpenses).ToString("C2"))
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Telemetry Stats -->
+            <div class="col-12 col-xl-8">
+                <div class="saas-card h-100">
+                    <div class="saas-card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <h3 class="card-heading">System Telemetry</h3>
+                            <p class="card-subheading">Aggregated from @ProcessedWebLogs.Count operational hours.</p>
+                        </div>
+                    </div>
+                    <div class="saas-card-body">
+                        <div class="row g-4">
+                            <div class="col-6 col-lg-3">
+                                <div class="telemetry-stat">
+                                    <div class="stat-label">Peak Generation</div>
+                                    <div class="stat-val text-slate-800">@PeakGeneration.ToString("N0") <span class="text-slate-500 fs-6 fw-normal">kWh</span></div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-lg-3">
+                                <div class="telemetry-stat">
+                                    <div class="stat-label">Peak Demand</div>
+                                    <div class="stat-val text-slate-800">@PeakDemand.ToString("N0") <span class="text-slate-500 fs-6 fw-normal">kWh</span></div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-lg-3">
+                                <div class="telemetry-stat">
+                                    <div class="stat-label">Grid Deficit Time</div>
+                                    <div class="stat-val text-rose-600">@DeficitHours <span class="text-rose-400 fs-6 fw-normal">hrs</span></div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-lg-3">
+                                <div class="telemetry-stat">
+                                    <div class="stat-label">Avg Yield</div>
+                                    <div class="stat-val text-slate-800">@AvgGeneration.ToString("N0") <span class="text-slate-500 fs-6 fw-normal">kWh</span></div>
+                                </div>
+                            </div>
+                        </div>
+                        <hr class="my-4 border-slate-200" />
+                        <!-- Load Capacity Bar -->
+                        <div class="d-flex justify-content-between align-items-end mb-2">
+                            <div>
+                                <div class="fw-semibold text-slate-800">Load Capacity Fulfillment</div>
+                                <div class="small text-slate-500">Yielding @GetCoveragePercent()% of factory request</div>
+                            </div>
+                            <div class="text-end">
+                                @{ var headroom = TotalGeneration - TotalDemand; }
+                                <div class="fw-bold @(headroom >= 0 ? "text-emerald-600" : "text-rose-600")">
+                                    @(headroom >= 0 ? "+" : "")@headroom.ToString("N0") kWh
+                                </div>
+                            </div>
+                        </div>
+                        <div class="progress" style="height: 12px; background-color: #f1f5f9;">
+                            <div class="progress-bar @(GetCoveragePercent() >= 100 ? "bg-emerald-500" : "bg-indigo-500")" 
+                                 role="progressbar" 
+                                 style="width: @(GetCoveragePercent().ToString("F1"))%">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- ===================== DATA TABLE ===================== -->
+        <div class="row g-4 mt-2">
+            <div class="col-12">
+                <div class="saas-card">
+                    <div class="saas-card-header border-bottom">
+                        <h3 class="card-heading">Hourly Operations Ledger</h3>
+                        <p class="card-subheading">Detailed breakdown of generation vs. demand cycles.</p>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table saas-table align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Conditions</th>
+                                    <th class="text-end">Yield (kWh)</th>
+                                    <th class="text-end">Draw (kWh)</th>
+                                    <th class="text-end">Net (kWh)</th>
+                                    <th class="text-end">Savings</th>
+                                    <th class="text-end">Expense</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (ProcessedWebLogs.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="8" class="text-center text-slate-500 py-5">
+                                            No data available. Initialize simulator engine.
+                                        </td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var log in ProcessedWebLogs)
+                                    {
+                                        var net = log.TotalGeneration - log.Demand;
+                                        <tr>
+                                            <td class="fw-medium text-slate-700">@log.Hour.ToString("00"):00</td>
+                                            <td>
+                                                <span class="weather-tag">@log.WeatherCondition</span>
+                                            </td>
+                                            <td class="text-end">@log.TotalGeneration.ToString("N1")</td>
+                                            <td class="text-end">@log.Demand.ToString("N1")</td>
+                                            <td class="text-end fw-medium @(net >= 0 ? "text-emerald-600" : "text-rose-600")">
+                                                @(net >= 0 ? "+" : "")@net.ToString("N1")
+                                            </td>
+                                            <td class="text-end text-emerald-600 fw-medium">@log.HourlySavings.ToString("C2")</td>
+                                            <td class="text-end text-rose-600 fw-medium">@log.HourlyExpense.ToString("C2")</td>
+                                            <td>
+                                                @if (log.HourlyExpense > 0)
+                                                {
+                                                    <span class="badge-soft-danger w-100 text-center">Importing</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge-soft-success w-100 text-center">Sustained</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+@code {
+    // ADDED BY AI (Sprint 6 - Bug Fix 2): picks an icon per asset type so the flexible
+    // @foreach loop above still looks intentional rather than generic. Any future asset type
+    // that doesn't get its own case below still renders a sensible default icon instead of
+    // breaking the layout -- this is deliberate, since the whole point of the Assets list is
+    // that new asset types shouldn't require touching this markup.
+    protected MarkupString GetAssetIconMarkup(EnergyAsset asset)
+    {
+        string svg = asset switch
+        {
+            SolarInverter => "<svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><circle cx=\"12\" cy=\"12\" r=\"4\"></circle><path d=\"M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4\"></path></svg>",
+            WindTurbine => "<svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M12 22v-6\"></path><path d=\"M12 16a4 4 0 0 0 4-4c3 0 4-2 4-4M12 16a4 4 0 0 1-4-4c-3 0-4-2-4-4M12 16a4 4 0 0 0 4-4c0-3-2-4-4-4\"></path><circle cx=\"12\" cy=\"12\" r=\"1.5\"></circle></svg>",
+            // Generic fallback (a lightning-bolt glyph) for any future asset type.
+            _ => "<svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M13 2 3 14h7l-1 8 10-12h-7l1-8z\"></path></svg>"
+        };
+        return new MarkupString(svg);
+    }
+
+    // SUCCESS HOOKS: Re-calculates percentages natively using clear double definitions
+    private double GetCoveragePercent()
+    {
+        if (TotalDemand <= 0) return 0;
+        
+        double percentage = (TotalGeneration / TotalDemand) * 100;
+        return percentage > 100 ? 100 : Math.Round(percentage, 1); 
+    }
+
+    private double GetSavingsRatioPercent()
+    {
+        double totalFinancials = TotalSavings + TotalExpenses;
+        if (totalFinancials <= 0) return 0;
+        
+        return Math.Round((TotalSavings / totalFinancials) * 100, 1);
+    }
+
+    private double GetExpenseRatioPercent()
+    {
+        double totalFinancials = TotalSavings + TotalExpenses;
+        if (totalFinancials <= 0) return 0;
+        
+        return Math.Round((TotalExpenses / totalFinancials) * 100, 1);
+    }
+}

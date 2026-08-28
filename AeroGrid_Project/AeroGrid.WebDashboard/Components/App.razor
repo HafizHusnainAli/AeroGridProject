@@ -1,0 +1,41 @@
+﻿
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <ResourcePreloader />
+    <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
+    <link rel="stylesheet" href="@Assets["app.css"]" />
+    <link rel="stylesheet" href="@Assets["AeroGrid.WebDashboard.styles.css"]" />
+    <ImportMap />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <HeadOutlet />
+</head>
+
+<body>
+    @* MODIFIED BY AI (critical fix): added @@rendermode="InteractiveServer" below.
+       Program.cs already registers interactive server components
+       (AddInteractiveServerComponents / AddInteractiveServerRenderMode), but that only makes
+       the capability available -- nothing in the component tree was actually opting into it.
+       Without this attribute, every page (including GridManager) rendered as static HTML
+       only: the initial page load's data was real (OnInitializedAsync still runs once during
+       static prerendering, which is why the first weather fetch for the default city worked),
+       but no further interaction could ever reach the server afterward -- typing into the
+       city box and clicking "Sync Live Grid" were both inert, since two-way data binding and
+       click handlers require a live interactive circuit to do anything. This is also why
+       toggling an asset appeared to do nothing: the checkbox click never reached the server
+       either. This was a pre-existing gap in the project (App.razor/Routes.razor were not
+       files touched by any earlier change here), not something introduced by any of the other
+       Sprint 6 work -- but it's what was actually blocking both the weather search AND the
+       asset toggle from ever responding to input at all.
+       (This explanation is a Razor comment, not an HTML comment, specifically so the @ symbols
+       above are never mistaken for real Razor syntax by the compiler.) *@
+    <Routes @rendermode="InteractiveServer" />
+    <ReconnectModal />
+    <script src="@Assets["_framework/blazor.web.js"]"></script>
+</body>
+
+</html>
